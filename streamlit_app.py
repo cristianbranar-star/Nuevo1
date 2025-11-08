@@ -1,8 +1,9 @@
-import streamlit as st
+mport streamlit as st
 
 # --- CONTENIDO DE LAS GUÍAS ---
 # Definimos todo el contenido de los descartes en un diccionario.
-# Esto hace que sea fácil de agregar o modificar pasos sin tocar la lógica.
+# (El contenido de GUIAS no cambia, se omite aquí por brevedad,
+# pero está en el código final)
 GUIAS = {
     'internet': {
         'icono': "🌐",
@@ -170,6 +171,10 @@ def inicializar_estado():
         st.session_state.guia_actual = None
     if 'estado_final' not in st.session_state:
         st.session_state.estado_final = None # 'Resuelto en N1' o 'Escalado a N2'
+    
+    # NUEVO: Almacenará la bitácora de {paso_idx: {'comentario': ..., 'imagenes': [...]}}
+    if 'documentacion_pasos' not in st.session_state:
+        st.session_state.documentacion_pasos = {}
 
 def mostrar_menu():
     """Muestra la pantalla del menú principal con botones."""
@@ -185,8 +190,29 @@ def mostrar_menu():
             st.session_state.vista = clave_guia
             # 3. Reseteamos el contador de pasos
             st.session_state.paso_actual = 0
-            # 4. Forzamos un 'rerun' para que la app se redibuje con la nueva vista
+            # 4. NUEVO: Reseteamos la bitácora para el nuevo ticket
+            st.session_state.documentacion_pasos = {}
+            # 5. Forzamos un 'rerun' para que la app se redibuje con la nueva vista
             st.rerun()
+
+def guardar_datos_paso():
+    """NUEVA FUNCIÓN: Guarda los datos del paso actual en session_state."""
+    paso_idx = st.session_state.paso_actual
+    # Usamos .get() para leer los valores de los widgets (vinculados por 'key')
+    # Si la clave no existe (p.ej. el widget aún no se ha renderizado), devuelve "" o []
+    comentario = st.session_state.get(f"comment_{paso_idx}", "")
+    imagenes = st.session_state.get(f"uploader_{paso_idx}", [])
+    
+    # Solo guardamos si hay algo que guardar
+    if comentario or imagenes:
+        guia = GUIAS[st.session_state.guia_actual]
+        titulo_paso = guia['pasos'][paso_idx]['titulo']
+        
+        st.session_state.documentacion_pasos[paso_idx] = {
+            'titulo_paso': titulo_paso,
+            'comentario': comentario,
+            'imagenes': imagenes
+        }
 
 def mostrar_guia_descarte(clave_guia):
     """Muestra el paso a paso de una guía específica."""
@@ -201,6 +227,7 @@ def mostrar_guia_descarte(clave_guia):
     if st.button("‹‹ Cancelar y Volver al Menú"):
         st.session_state.vista = 'menu'
         st.session_state.guia_actual = None
+        st.session_state.documentacion_pasos = {} # Limpiar bitácora
         st.rerun()
 
     st.divider()
@@ -208,8 +235,6 @@ def mostrar_guia_descarte(clave_guia):
     # Comprobar si hemos completado todos los pasos
     if paso_idx >= total_pasos:
         # --- Pantalla de Escalar a N2 ---
-        # Si se acabaron los pasos, cambiamos el estado y forzamos un rerun
-        # Esto nos llevará a la pantalla de "finalizar_ticket"
         st.session_state.vista = 'finalizar_ticket'
         st.session_state.estado_final = 'Escalado a N2'
         st.rerun()
@@ -224,6 +249,25 @@ def mostrar_guia_descarte(clave_guia):
         st.subheader(paso_actual['titulo'])
         st.info(paso_actual['instruccion'])
         
+        # --- INICIO DE NUEVOS CAMBIOS ---
+        st.subheader("Bitácora de este Paso (Opcional)")
+        
+        # Usamos una clave ('key') única para cada widget.
+        # Esto es VITAL para que Streamlit guarde su estado.
+        st.text_area(
+            "Comentarios sobre este paso:", 
+            key=f"comment_{paso_idx}",
+            placeholder="Escriba aquí lo que observó o la respuesta del usuario..."
+        )
+        
+        st.file_uploader(
+            "Subir evidencia para este paso:", 
+            key=f"uploader_{paso_idx}",
+            accept_multiple_files=True, 
+            type=['png', 'jpg', 'jpeg']
+        )
+        # --- FIN DE NUEVOS CAMBIOS ---
+        
         st.divider()
 
         # Botones de acción (Resuelto vs Siguiente)
@@ -231,17 +275,15 @@ def mostrar_guia_descarte(clave_guia):
         
         with col1:
             if st.button("✅ Problema Resuelto", type="primary", use_container_width=True):
-                # Si se resuelve, cambiamos el estado y forzamos rerun
-                # Esto nos llevará a la pantalla de "finalizar_ticket"
+                guardar_datos_paso() # Guardar datos del último paso
                 st.session_state.vista = 'finalizar_ticket'
                 st.session_state.estado_final = 'Resuelto en N1'
                 st.rerun()
 
         with col2:
             if st.button("❌ No se resolvió, siguiente paso", use_container_width=True):
-                # Aumentamos el contador de pasos en la memoria
-                st.session_state.paso_actual += 1
-                # Forzamos un rerun para mostrar el siguiente paso
+                guardar_datos_paso() # Guardar datos del paso actual
+                st.session_state.paso_actual += 1 # Avanzar al siguiente
                 st.rerun()
 
 def mostrar_pantalla_final():
@@ -256,16 +298,41 @@ def mostrar_pantalla_final():
     else:
         st.error(f"⚠️ Ticket para Escalar a N2 - {guia_info['titulo']}", icon="🚨")
 
-    st.header("Documentación y Evidencia")
-    st.write("Añada los comentarios de cierre y cualquier evidencia (capturas de pantalla) para el ticket.")
+    # --- INICIO DE NUEVOS CAMBIOS: Resumen de Bitácora ---
+    st.header("Resumen de Bitácora por Paso")
+    if not st.session_state.documentacion_pasos:
+        st.write("No se agregó documentación durante los pasos.")
+    else:
+        # Ordenamos por el índice del paso (clave del diccionario)
+        for paso_idx, datos in sorted(st.session_state.documentacion_pasos.items()):
+            with st.expander(f"**Paso {paso_idx + 1}: {datos['titulo_paso']}**", expanded=False):
+                if datos['comentario']:
+                    st.write(f"**Comentario:**")
+                    st.markdown(f"> {datos['comentario'].replace('\n', '\n> ')}")
+                if datos['imagenes']:
+                    st.write(f"**Evidencia:** {len(datos['imagenes'])} archivo(s)")
+                    for img in datos['imagenes']:
+                        st.image(img, width=150, caption=img.name)
+    st.divider()
+    # --- FIN DE NUEVOS CAMBIOS ---
     
-    # Widgets para comentarios y carga de archivos
-    comentarios = st.text_area("Comentarios de Cierre:", height=150, placeholder="Escriba aquí el resumen de lo realizado, la solución aplicada o la razón del escalado...")
+    st.header("Documentación y Cierre Final")
+    st.write("Añada un comentario de cierre final para el ticket.")
     
-    imagenes = st.file_uploader(
-        "Subir Evidencia (Capturas de Pantalla)", 
+    # Widgets para comentarios y carga de archivos FINALES
+    # Se usan claves diferentes para no colisionar con los widgets de los pasos
+    comentarios_finales = st.text_area(
+        "Comentarios de Cierre Final:", 
+        height=150, 
+        placeholder="Escriba aquí el resumen de lo realizado, la solución aplicada o la razón del escalado...",
+        key="comentarios_finales" # Clave única
+    )
+    
+    imagenes_finales = st.file_uploader(
+        "Subir Evidencia Final (Opcional)", 
         accept_multiple_files=True, 
-        type=['png', 'jpg', 'jpeg']
+        type=['png', 'jpg', 'jpeg'],
+        key="imagenes_finales" # Clave única
     )
     
     st.divider()
@@ -276,13 +343,12 @@ def mostrar_pantalla_final():
     st.write(f"**Categoría:** {guia_info['titulo']}")
     st.write(f"**Estado de Cierre:** {estado}")
     
-    if comentarios:
-        st.write(f"**Comentarios:** *{comentarios}*")
+    if comentarios_finales:
+        st.write(f"**Comentarios Finales:** *{comentarios_finales}*")
         
-    if imagenes:
-        st.write(f"**Evidencia Adjunta:** {len(imagenes)} archivo(s)")
-        # Pequeña vista previa de las imágenes subidas
-        for img in imagenes:
+    if imagenes_finales:
+        st.write(f"**Evidencia Final Adjunta:** {len(imagenes_finales)} archivo(s)")
+        for img in imagenes_finales:
             st.image(img, width=200, caption=img.name)
             
     st.divider()
@@ -290,16 +356,20 @@ def mostrar_pantalla_final():
     # Botón final para "guardar" y volver al menú
     if st.button("Guardar Ticket y Volver al Menú", type="primary", use_container_width=True):
         # Aquí es donde, en una app real, guardarías la info en una base de datos.
-        # Por ahora, solo reseteamos el estado y volvemos al menú.
         
+        # Limpiamos todo para el próximo ticket
         st.session_state.vista = 'menu'
         st.session_state.paso_actual = 0
         st.session_state.guia_actual = None
         st.session_state.estado_final = None
+        st.session_state.documentacion_pasos = {}
+        
+        # Limpiamos los widgets finales manualmente por si acaso
+        st.session_state.comentarios_finales = ""
+        st.session_state.imagenes_finales = []
         
         st.balloons()
         st.rerun()
-
 
 # --- Punto de Entrada Principal de la App ---
 
