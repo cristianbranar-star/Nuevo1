@@ -328,12 +328,7 @@ def mostrar_pantalla_final():
         key="comentarios_finales" # Clave única
     )
     
-    imagenes_finales = st.file_uploader(
-        "Subir Evidencia Final (Opcional)", 
-        accept_multiple_files=True, 
-        type=['png', 'jpg', 'jpeg'],
-        key="imagenes_finales" # Clave única
-    )
+    # SE ELIMINA EL st.file_uploader DE IMAGENES FINALES
     
     st.divider()
     
@@ -346,10 +341,7 @@ def mostrar_pantalla_final():
     if comentarios_finales:
         st.write(f"**Comentarios Finales:** *{comentarios_finales}*")
         
-    if imagenes_finales:
-        st.write(f"**Evidencia Final Adjunta:** {len(imagenes_finales)} archivo(s)")
-        for img in imagenes_finales:
-            st.image(img, width=200, caption=img.name)
+    # SE ELIMINA EL BLOQUE 'if imagenes_finales:'
             
     st.divider()
 
@@ -366,7 +358,7 @@ def mostrar_pantalla_final():
         
         # Limpiamos los widgets finales manualmente por si acaso
         st.session_state.comentarios_finales = ""
-        st.session_state.imagenes_finales = []
+        # SE ELIMINA LA LÍNEA 'st.session_state.imagenes_finales = []'
         
         st.balloons()
         st.rerun()
