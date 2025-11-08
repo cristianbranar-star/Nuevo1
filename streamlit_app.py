@@ -1,4 +1,4 @@
-mport streamlit as st
+import streamlit as st
 
 # --- CONTENIDO DE LAS GUÍAS ---
 # Definimos todo el contenido de los descartes en un diccionario.
