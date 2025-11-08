@@ -166,6 +166,10 @@ def inicializar_estado():
         st.session_state.vista = 'menu'
     if 'paso_actual' not in st.session_state:
         st.session_state.paso_actual = 0
+    if 'guia_actual' not in st.session_state:
+        st.session_state.guia_actual = None
+    if 'estado_final' not in st.session_state:
+        st.session_state.estado_final = None # 'Resuelto en N1' o 'Escalado a N2'
 
 def mostrar_menu():
     """Muestra la pantalla del menú principal con botones."""
@@ -175,11 +179,13 @@ def mostrar_menu():
     for clave_guia, config in GUIAS.items():
         # Usamos st.button para crear un botón. Si se presiona, devuelve True.
         if st.button(f"{config['icono']} {config['titulo']}", use_container_width=True):
-            # 1. Cambiamos la 'vista' en la memoria
+            # 1. Guardamos la guía seleccionada
+            st.session_state.guia_actual = clave_guia
+            # 2. Cambiamos la 'vista' en la memoria
             st.session_state.vista = clave_guia
-            # 2. Reseteamos el contador de pasos
+            # 3. Reseteamos el contador de pasos
             st.session_state.paso_actual = 0
-            # 3. Forzamos un 'rerun' para que la app se redibuje con la nueva vista
+            # 4. Forzamos un 'rerun' para que la app se redibuje con la nueva vista
             st.rerun()
 
 def mostrar_guia_descarte(clave_guia):
@@ -192,8 +198,9 @@ def mostrar_guia_descarte(clave_guia):
     st.header(f"{guia['icono']} {guia['titulo']}")
     
     # Botón para regresar al menú
-    if st.button("‹‹ Volver al Menú Principal"):
+    if st.button("‹‹ Cancelar y Volver al Menú"):
         st.session_state.vista = 'menu'
+        st.session_state.guia_actual = None
         st.rerun()
 
     st.divider()
@@ -201,15 +208,11 @@ def mostrar_guia_descarte(clave_guia):
     # Comprobar si hemos completado todos los pasos
     if paso_idx >= total_pasos:
         # --- Pantalla de Escalar a N2 ---
-        st.error("⚠️ **DESCARTE N1 AGOTADO** ⚠️", icon="🚨")
-        st.subheader("Acción Requerida:")
-        st.markdown(
-            """
-            1.  **No se pudo resolver en N1.**
-            2.  **Documente** todos los pasos realizados en el ticket.
-            3.  **Escale** el ticket al equipo de N2 (Nivel 2) con toda la información.
-            """
-        )
+        # Si se acabaron los pasos, cambiamos el estado y forzamos un rerun
+        # Esto nos llevará a la pantalla de "finalizar_ticket"
+        st.session_state.vista = 'finalizar_ticket'
+        st.session_state.estado_final = 'Escalado a N2'
+        st.rerun()
     else:
         # --- Pantalla del Paso Actual ---
         paso_actual = guia['pasos'][paso_idx]
@@ -228,12 +231,10 @@ def mostrar_guia_descarte(clave_guia):
         
         with col1:
             if st.button("✅ Problema Resuelto", type="primary", use_container_width=True):
-                st.success("¡Excelente! Registre el ticket como resuelto.")
-                st.balloons()
-                # Volvemos al menú
-                st.session_state.vista = 'menu'
-                # st.rerun() no es necesario aquí, Streamlit lo hará al terminar el script
-                # pero lo añadimos para claridad.
+                # Si se resuelve, cambiamos el estado y forzamos rerun
+                # Esto nos llevará a la pantalla de "finalizar_ticket"
+                st.session_state.vista = 'finalizar_ticket'
+                st.session_state.estado_final = 'Resuelto en N1'
                 st.rerun()
 
         with col2:
@@ -242,6 +243,62 @@ def mostrar_guia_descarte(clave_guia):
                 st.session_state.paso_actual += 1
                 # Forzamos un rerun para mostrar el siguiente paso
                 st.rerun()
+
+def mostrar_pantalla_final():
+    """Muestra la pantalla de tipificación, comentarios y carga de evidencia."""
+    
+    estado = st.session_state.estado_final
+    guia_info = GUIAS[st.session_state.guia_actual]
+
+    # Título dinámico basado en el estado
+    if estado == 'Resuelto en N1':
+        st.success(f"✅ ¡Ticket Resuelto! - {guia_info['titulo']}", icon="✅")
+    else:
+        st.error(f"⚠️ Ticket para Escalar a N2 - {guia_info['titulo']}", icon="🚨")
+
+    st.header("Documentación y Evidencia")
+    st.write("Añada los comentarios de cierre y cualquier evidencia (capturas de pantalla) para el ticket.")
+    
+    # Widgets para comentarios y carga de archivos
+    comentarios = st.text_area("Comentarios de Cierre:", height=150, placeholder="Escriba aquí el resumen de lo realizado, la solución aplicada o la razón del escalado...")
+    
+    imagenes = st.file_uploader(
+        "Subir Evidencia (Capturas de Pantalla)", 
+        accept_multiple_files=True, 
+        type=['png', 'jpg', 'jpeg']
+    )
+    
+    st.divider()
+    
+    st.subheader("Resumen de Tipificación")
+    
+    # Mostramos un resumen de lo que se "guardará"
+    st.write(f"**Categoría:** {guia_info['titulo']}")
+    st.write(f"**Estado de Cierre:** {estado}")
+    
+    if comentarios:
+        st.write(f"**Comentarios:** *{comentarios}*")
+        
+    if imagenes:
+        st.write(f"**Evidencia Adjunta:** {len(imagenes)} archivo(s)")
+        # Pequeña vista previa de las imágenes subidas
+        for img in imagenes:
+            st.image(img, width=200, caption=img.name)
+            
+    st.divider()
+
+    # Botón final para "guardar" y volver al menú
+    if st.button("Guardar Ticket y Volver al Menú", type="primary", use_container_width=True):
+        # Aquí es donde, en una app real, guardarías la info en una base de datos.
+        # Por ahora, solo reseteamos el estado y volvemos al menú.
+        
+        st.session_state.vista = 'menu'
+        st.session_state.paso_actual = 0
+        st.session_state.guia_actual = None
+        st.session_state.estado_final = None
+        
+        st.balloons()
+        st.rerun()
 
 
 # --- Punto de Entrada Principal de la App ---
@@ -252,6 +309,9 @@ inicializar_estado()
 # 2. "Enrutador": Decide qué pantalla mostrar basado en la 'vista' actual
 if st.session_state.vista == 'menu':
     mostrar_menu()
+elif st.session_state.vista == 'finalizar_ticket':
+    mostrar_pantalla_final()
 else:
-    # Si la vista no es 'menu', debe ser una de las claves de guía (ej: 'internet')
+    # Si la vista no es 'menu' ni 'finalizar_ticket', 
+    # debe ser una de las claves de guía (ej: 'internet')
     mostrar_guia_descarte(st.session_state.vista)
