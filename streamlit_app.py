@@ -316,32 +316,54 @@ def mostrar_pantalla_final():
     st.divider()
     # --- FIN DE NUEVOS CAMBIOS ---
     
-    st.header("Documentación y Cierre Final")
-    st.write("Añada un comentario de cierre final para el ticket.")
+    # SE ELIMINA EL st.header("Documentación y Cierre Final")
+    # SE ELIMINA EL st.write("Añada un comentario de cierre final para el ticket.")
+    # SE ELIMINA el st.text_area("Comentarios de Cierre Final:...")
     
-    # Widgets para comentarios y carga de archivos FINALES
-    # Se usan claves diferentes para no colisionar con los widgets de los pasos
-    comentarios_finales = st.text_area(
-        "Comentarios de Cierre Final:", 
-        height=150, 
-        placeholder="Escriba aquí el resumen de lo realizado, la solución aplicada o la razón del escalado...",
-        key="comentarios_finales" # Clave única
+    # --- INICIO DE NUEVA LÓGICA ---
+    
+    # Generar el resumen consolidado para copiar y pegar
+    resumen_para_copiar = []
+    resumen_para_copiar.append(f"CATEGORÍA: {guia_info['titulo']}")
+    resumen_para_copiar.append(f"ESTADO FINAL: {estado}")
+    resumen_para_copiar.append("="*30)
+    resumen_para_copiar.append("BITÁCORA DE DESCARTES REALIZADOS:")
+    
+    if not st.session_state.documentacion_pasos:
+        resumen_para_copiar.append("\n- No se registraron comentarios durante los pasos.")
+    else:
+        for paso_idx, datos in sorted(st.session_state.documentacion_pasos.items()):
+            resumen_para_copiar.append(f"\nPASO {paso_idx + 1}: {datos['titulo_paso']}")
+            
+            if datos['comentario']:
+                # Formatear comentario para que sea legible
+                comentario_limpio = '\n  '.join(datos['comentario'].splitlines())
+                resumen_para_copiar.append(f"  Comentario: {comentario_limpio}")
+            else:
+                resumen_para_copiar.append("  Comentario: (Sin comentario)")
+            
+            if datos['imagenes']:
+                resumen_para_copiar.append(f"  Evidencia: {len(datos['imagenes'])} imagen(es) adjunta(s).")
+
+    # Unir todas las líneas del resumen en un solo string
+    resumen_string_final = "\n".join(resumen_para_copiar)
+    
+    st.subheader("Resumen de Tipificación (Para Copiar)")
+    st.write("Usa el siguiente resumen para documentar tu ticket en el sistema oficial.")
+    
+    st.text_area(
+        "Resumen del Ticket:",
+        value=resumen_string_final,
+        height=300,
+        disabled=True, # Deshabilitado para que sea solo de lectura (pero copiable)
+        key="resumen_final_generado"
     )
+    # --- FIN DE NUEVA LÓGICA ---
     
-    # SE ELIMINA EL st.file_uploader DE IMAGENES FINALES
-    
-    st.divider()
-    
-    st.subheader("Resumen de Tipificación")
-    
-    # Mostramos un resumen de lo que se "guardará"
-    st.write(f"**Categoría:** {guia_info['titulo']}")
-    st.write(f"**Estado de Cierre:** {estado}")
-    
-    if comentarios_finales:
-        st.write(f"**Comentarios Finales:** *{comentarios_finales}*")
-        
-    # SE ELIMINA EL BLOQUE 'if imagenes_finales:'
+    # SE ELIMINA EL st.subheader("Resumen de Tipificación")
+    # SE ELIMINA el st.write(f"**Categoría:** {guia_info['titulo']}")
+    # SE ELIMINA el st.write(f"**Estado de Cierre:** {estado}")
+    # SE ELIMINA el bloque 'if comentarios_finales:'
             
     st.divider()
 
@@ -357,8 +379,7 @@ def mostrar_pantalla_final():
         st.session_state.documentacion_pasos = {}
         
         # Limpiamos los widgets finales manualmente por si acaso
-        st.session_state.comentarios_finales = ""
-        # SE ELIMINA LA LÍNEA 'st.session_state.imagenes_finales = []'
+        # SE ELIMINA LA LÍNEA 'st.session_state.comentarios_finales = ""'
         
         st.balloons()
         st.rerun()
